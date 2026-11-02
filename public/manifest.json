@@ -1,1 +1,1 @@
-{"background_color":"#0f172a","display":"standalone","name":"Workout Tracker","short_name":"Workout","start_url":"/","theme_color":"#22c55e"}
+{"background_color":"#0f172a","display":"standalone","icons":[{"sizes":"192x192","src":"/icon-192.png","type":"image/png"},{"sizes":"512x512","src":"/icon-512.png","type":"image/png"}],"name":"Workout Tracker","short_name":"Workout","start_url":"/","theme_color":"#22c55e"}

@@ -1,3 +1,4 @@
+- Nov 2, 2026 — Audit pass 2 (part 1): trainer client detail now shows the client's assigned program alongside recent workouts (new link-checked endpoint), PWA install check done — service worker caching the app shell, manifest icons added, offline load works for the shell while API calls stay network-only. Smoke tests now use a fresh temp DB per run (old fixed path made re-runs fail on duplicate emails) and cover the new endpoint and PWA files.
 - Nov 2, 2026 — Audit pass 1: fixed routine-start authorization (guessing a routine id no longer starts it; owner or assigned client only), fixed session expiry to SQLite datetime format, added per-exercise Add set, routine duplication, and a recent-volume chart on Progress. Smoke tests extended for the blocked start and duplication, all green.
 # Build log
 

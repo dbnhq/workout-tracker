@@ -93,7 +93,9 @@ async function renderCoach() {
     $('#clientList').innerHTML = d.clients.length ? d.clients.map((c) => `<div><button data-client="${c.id}">${esc(c.name)}</button> <span class="small">${esc(c.email)}</span> <button data-assign="${c.id}">Assign routine…</button></div>`).join('') : '<p class="small">No clients linked yet. Share your invite code.</p>';
     document.querySelectorAll('[data-client]').forEach((b) => (b.onclick = async () => {
       const cd = await api(`/api/trainer/clients/${b.dataset.client}/workouts`);
-      $('#clientDetail').innerHTML = `<h3>Recent workouts</h3><p class="small">${cd.stats.workouts} workouts · ${cd.stats.volume} volume</p>` + cd.workouts.slice(0, 5).map((w) => `<div><strong>${esc(w.title)}</strong> <span class="small">${new Date(w.started_at).toLocaleDateString()}</span></div>`).join('') + `<div class="row"><input id="fbBody" placeholder="Feedback for this client"><button id="fbBtn">Send feedback</button></div>`;
+      const pr = await api(`/api/trainer/clients/${b.dataset.client}/routines`);
+      const prog = pr.routines.length ? `<h3>Assigned program</h3>` + pr.routines.map((r) => `<div><strong>${esc(r.title)}</strong><div class="small">${r.exercises.map((e) => `${esc(e.name)} ${e.sets}x${e.reps}`).join(', ')}</div></div>`).join('') : '<p class="small">No routines assigned yet.</p>';
+      $('#clientDetail').innerHTML = `<h3>Recent workouts</h3><p class="small">${cd.stats.workouts} workouts · ${cd.stats.volume} volume</p>` + cd.workouts.slice(0, 5).map((w) => `<div><strong>${esc(w.title)}</strong> <span class="small">${new Date(w.started_at).toLocaleDateString()}</span></div>`).join('') + prog + `<div class="row"><input id="fbBody" placeholder="Feedback for this client"><button id="fbBtn">Send feedback</button></div>`;
       $('#fbBtn').onclick = async () => { await api('/api/feedback', 'POST', { client_id: Number(b.dataset.client), body: $('#fbBody').value }); alert('Feedback sent.'); };
     }));
     document.querySelectorAll('[data-assign]').forEach((b) => (b.onclick = async () => {
@@ -133,4 +135,5 @@ $('#registerBtn').onclick = async () => { try { await api('/api/auth/register', 
 $('#loginBtn').onclick = async () => { try { await api('/api/auth/login', 'POST', { email: $('#email').value, password: $('#password').value }); boot(); } catch (e) { $('#authMsg').textContent = e.message; } };
 $('#logoutBtn').onclick = async () => { await api('/api/auth/logout', 'POST', {}); location.reload(); };
 $('#linkBtn').onclick = async () => { try { await api('/api/link', 'POST', { code: $('#linkCode').value }); loadAll(); } catch (e) { alert(e.message); } };
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 boot();

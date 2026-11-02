@@ -140,6 +140,13 @@ app.get('/api/trainer/clients/:id/workouts', auth, requireRole('trainer'), (req,
   return send(res, 200, { workouts, stats: store.stats(clientId) });
 });
 
+app.get('/api/trainer/clients/:id/routines', auth, requireRole('trainer'), (req, res) => {
+  const clientId = Number(req.params.id);
+  if (!store.isLinked(req.user.id, clientId)) return send(res, 403, { error: 'Client is not linked to you' });
+  const routines = store.assignedRoutines(clientId).map((r) => ({ ...r, exercises: store.routineExercises(r.id) }));
+  return send(res, 200, { routines });
+});
+
 app.post('/api/feedback', auth, requireRole('trainer'), (req, res) => {
   const { client_id, workout_id, body } = req.body || {};
   if (!body || !store.isLinked(req.user.id, Number(client_id))) return send(res, 403, { error: 'Client is not linked to you or feedback is empty' });

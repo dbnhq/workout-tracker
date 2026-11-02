@@ -1,9 +1,12 @@
 const { spawn } = require('child_process');
 const assert = require('assert');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
 async function main() {
   const port = 3456;
-  const proc = spawn('node', ['server.js'], { env: { ...process.env, PORT: String(port), WORKOUT_DATA_DIR: '/tmp/wt-test-db' }, stdio: 'pipe' });
+  const proc = spawn('node', ['server.js'], { env: { ...process.env, PORT: String(port), WORKOUT_DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'wt-test-')) }, stdio: 'pipe' });
   await new Promise((r) => setTimeout(r, 1200));
   const base = `http://localhost:${port}`;
   async function req(path, method, body, cookie) {
@@ -51,6 +54,17 @@ async function main() {
     assert.equal(prog.body.best.max_weight, 60);
     const fb = await req('/api/feedback', 'POST', { client_id: client.body.user.id, body: 'Great session' }, tCookie);
     assert.equal(fb.status, 201);
+    // Trainer program view: linked trainer sees assigned routines, unlinked trainer is blocked
+    const clientProg = await req(`/api/trainer/clients/${client.body.user.id}/routines`, 'GET', null, tCookie);
+    assert.equal(clientProg.status, 200, JSON.stringify(clientProg.body));
+    assert.ok(clientProg.body.routines.some((r) => r.id === routine.body.id && r.exercises.length >= 1));
+    const progBlocked = await req(`/api/trainer/clients/${client.body.user.id}/routines`, 'GET', null, other.cookie.split(';')[0]);
+    assert.equal(progBlocked.status, 403);
+    // PWA files are served
+    const sw = await fetch(base + '/sw.js');
+    assert.equal(sw.status, 200);
+    const manifest = await (await fetch(base + '/manifest.json')).json();
+    assert.ok(manifest.icons.some((i) => i.sizes === '512x512'));
     console.log('smoke: all checks passed');
   } finally { proc.kill(); }
 }
