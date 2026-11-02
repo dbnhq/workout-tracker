@@ -33,6 +33,12 @@ async function main() {
     const other = await req('/api/auth/register', 'POST', { name: 'Other', email: 'other@example.com', password: 'password123', role: 'trainer' });
     const blocked = await req(`/api/trainer/clients/${client.body.user.id}/workouts`, 'GET', null, other.cookie.split(';')[0]);
     assert.equal(blocked.status, 403);
+    // Unassigned client must not start a trainer routine by guessing its id
+    const stranger = await req('/api/auth/register', 'POST', { name: 'Sam Stranger', email: 'sam@example.com', password: 'password123', role: 'client' });
+    const blockedStart = await req('/api/workouts', 'POST', { routine_id: routine.body.id }, stranger.cookie.split(';')[0]);
+    assert.equal(blockedStart.status, 403, JSON.stringify(blockedStart.body));
+    const dup = await req(`/api/routines/${routine.body.id}/duplicate`, 'POST', {}, tCookie);
+    assert.equal(dup.status, 201, JSON.stringify(dup.body));
     const workout = await req('/api/workouts', 'POST', { routine_id: routine.body.id }, cCookie);
     assert.equal(workout.status, 201);
     assert.ok(workout.body.sets.length >= 2);

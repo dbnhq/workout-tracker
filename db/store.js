@@ -72,6 +72,7 @@ function createStore(db) {
     myRoutines: (userId) => db.prepare('SELECT * FROM routines WHERE owner_id=? ORDER BY created_at DESC').all(userId),
     assignedRoutines: (clientId) => db.prepare('SELECT r.*, u.name AS trainer_name FROM assignments a JOIN routines r ON r.id=a.routine_id JOIN users u ON u.id=a.trainer_id WHERE a.client_id=? ORDER BY a.created_at DESC').all(clientId),
     assignRoutine: (routineId, trainerId, clientId) => db.prepare('INSERT OR IGNORE INTO assignments (routine_id,trainer_id,client_id) VALUES (?,?,?)').run(routineId, trainerId, clientId),
+    isAssigned: (routineId, clientId) => !!db.prepare('SELECT 1 FROM assignments WHERE routine_id=? AND client_id=?').get(routineId, clientId),
     createWorkout: (userId, routineId, title) => db.prepare('INSERT INTO workouts (user_id,routine_id,title) VALUES (?,?,?)').run(userId, routineId || null, title),
     getWorkout: (id) => db.prepare('SELECT * FROM workouts WHERE id=?').get(id),
     addSet: (workoutId, exerciseId, setIndex, reps, weight, rpe) =>

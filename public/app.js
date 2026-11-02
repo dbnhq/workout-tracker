@@ -46,15 +46,18 @@ async function startWorkout(routineId, title) {
 function renderActive(sets) {
   const byEx = {};
   sets.forEach((s) => (byEx[s.exercise_id] = byEx[s.exercise_id] || { name: s.name, rows: [] }).rows.push(s));
-  $('#activeWorkout').innerHTML = `<h3>Workout in progress</h3>` + Object.values(byEx).map((g) => `<h4>${esc(g.name)}</h4>` + g.rows.map((s) => `<div class="set ${s.completed ? 'done' : ''}"><span>Set ${s.set_index}</span><input data-s="${s.id}" data-f="reps" type="number" value="${s.reps ?? ''}" placeholder="Reps"><input data-s="${s.id}" data-f="weight" type="number" step="0.5" value="${s.weight ?? ''}" placeholder="Weight"><button data-done="${s.exercise_id}:${s.set_index}">✓ Done</button></div>`).join('')).join('') + `<div class="row"><button id="finishBtn">Finish workout</button><span id="restOut" class="small"></span></div>`;
+  $('#activeWorkout').innerHTML = `<h3>Workout in progress</h3>` + Object.entries(byEx).map(([exId, g]) => `<h4>${esc(g.name)}</h4>` + g.rows.map((s) => `<div class="set ${s.completed ? 'done' : ''}"><span>Set ${s.set_index}</span><input data-s="${s.id}" data-f="reps" type="number" value="${s.reps ?? ''}" placeholder="Reps"><input data-s="${s.id}" data-f="weight" type="number" step="0.5" value="${s.weight ?? ''}" placeholder="Weight"><button data-done="${s.exercise_id}:${s.set_index}">✓ Done</button></div>`).join('') + `<button class="secondary" data-addset="${exId}" data-next="${Math.max(...g.rows.map((r) => r.set_index)) + 1}">+ Add set</button>`).join('') + `<div class="row"><button id="finishBtn">Finish workout</button><span id="restOut" class="small"></span></div>`;
   document.querySelectorAll('[data-done]').forEach((b) => (b.onclick = async () => {
     const [exId, idx] = b.dataset.done.split(':');
-    const reps = document.querySelector(`[data-s][data-f="reps"]`);
-    // find inputs in same row
+    // inputs in the same row
     const row = b.parentElement;
     const r = row.querySelector('[data-f="reps"]').value, w = row.querySelector('[data-f="weight"]').value;
     await api(`/api/workouts/${activeId}/sets`, 'POST', { exercise_id: Number(exId), set_index: Number(idx), reps: Number(r), weight: Number(w) });
     row.classList.add('done'); startRest(90);
+  }));
+  document.querySelectorAll('[data-addset]').forEach((b) => (b.onclick = async () => {
+    const d = await api(`/api/workouts/${activeId}/sets`, 'POST', { exercise_id: Number(b.dataset.addset), set_index: Number(b.dataset.next), reps: 10, weight: null });
+    renderActive(d.sets);
   }));
   $('#finishBtn').onclick = async () => { await api(`/api/workouts/${activeId}/finish`, 'POST', {}); activeId = null; $('#activeWorkout').innerHTML = '<p>Workout saved. Nice work.</p>'; loadAll(); };
 }
@@ -65,7 +68,8 @@ function startRest(sec) {
 function renderRoutines() {
   $('#rExercises').innerHTML = '';
   addExRow();
-  $('#myRoutines').innerHTML = routines.mine.map((r) => `<div><strong>${esc(r.title)}</strong><span class="small"> ${r.exercises.map((e) => `${esc(e.name)} ${e.sets}x${e.reps}`).join(', ')}</span></div>`).join('') || '<p class="small">No routines yet.</p>';
+  $('#myRoutines').innerHTML = routines.mine.map((r) => `<div><strong>${esc(r.title)}</strong><span class="small"> ${r.exercises.map((e) => `${esc(e.name)} ${e.sets}x${e.reps}`).join(', ')}</span> <button class="secondary" data-dup="${r.id}">Duplicate</button></div>`).join('') || '<p class="small">No routines yet.</p>';
+  document.querySelectorAll('[data-dup]').forEach((b) => (b.onclick = async () => { await api(`/api/routines/${b.dataset.dup}/duplicate`, 'POST', {}); loadAll(); }));
   const sel = $('#progEx'); sel.innerHTML = exercises.map((e) => `<option value="${e.id}">${esc(e.name)}</option>`).join('');
 }
 function addExRow() {
@@ -102,7 +106,16 @@ async function renderCoach() {
     const f = await api('/api/feedback'); $('#feedbackList').innerHTML = f.feedback.map((x) => `<div><strong>${esc(x.trainer_name)}:</strong> ${esc(x.body)}</div>`).join('');
   }
 }
+async function renderVolumeChart() {
+  const d = await api('/api/workouts');
+  const done = d.workouts.filter((w) => w.finished_at).slice(0, 8).reverse();
+  if (!done.length) { $('#volumeChart').innerHTML = '<p class="small">Finish a workout to see volume here.</p>'; return; }
+  const vols = done.map((w) => w.sets.filter((s) => s.completed).reduce((a, s) => a + (s.reps || 0) * (s.weight || 0), 0));
+  const max = Math.max(...vols, 1);
+  $('#volumeChart').innerHTML = `<div class="bars">` + vols.map((v) => `<div style="flex:1"><div class="bar" style="height:${Math.round((v / max) * 100)}px"></div><div class="barlabel">${Math.round(v)}</div></div>`).join('') + `</div><p class="small">Volume per workout, most recent last.</p>`;
+}
 function renderProgress() {
+  renderVolumeChart();
   $('#progEx').onchange = async () => {
     const d = await api(`/api/progress/${$('#progEx').value}`);
     $('#progOut').innerHTML = d.best.max_weight ? `<p>Best: ${d.best.max_weight} · Est. 1RM: ${Math.round(d.best.est_1rm || 0)}</p>` : '<p class="small">No logged sets for this exercise yet.</p>';

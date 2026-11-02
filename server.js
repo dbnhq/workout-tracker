@@ -40,6 +40,8 @@ function requireRole(role) {
 }
 function send(res, code, obj) { return res.status(code).json(obj); }
 function validEmail(e) { return typeof e === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); }
+// SQLite datetime format, so expiry compares correctly against datetime('now')
+function sqliteExpiry(days) { return new Date(Date.now() + days * 24 * 3600 * 1000).toISOString().replace('T', ' ').slice(0, 19); }
 
 // Login rate limit, per IP, in memory
 const attempts = new Map();
@@ -60,7 +62,7 @@ app.post('/api/auth/register', (req, res) => {
   const info = store.createUser(name.trim(), email.toLowerCase(), hashPassword(password), role, invite);
   const user = store.getUserById(info.lastInsertRowid);
   const token = newToken();
-  store.createSession(hashToken(token), user.id, new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString());
+  store.createSession(hashToken(token), user.id, sqliteExpiry(30));
   res.setHeader('Set-Cookie', `wt_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${30 * 24 * 3600}`);
   return send(res, 201, { user });
 });
@@ -73,7 +75,7 @@ app.post('/api/auth/login', (req, res) => {
   if (!row || !verifyPassword(password || '', row.password_hash)) { recordAttempt(ip); return send(res, 401, { error: 'Invalid email or password' }); }
   const user = store.getUserById(row.id);
   const token = newToken();
-  store.createSession(hashToken(token), user.id, new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString());
+  store.createSession(hashToken(token), user.id, sqliteExpiry(30));
   res.setHeader('Set-Cookie', `wt_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${30 * 24 * 3600}`);
   return send(res, 200, { user });
 });
@@ -112,6 +114,14 @@ app.post('/api/routines/:id/assign', auth, requireRole('trainer'), (req, res) =>
   return send(res, 200, { ok: true });
 });
 
+app.post('/api/routines/:id/duplicate', auth, (req, res) => {
+  const routine = store.getRoutine(Number(req.params.id));
+  if (!routine || routine.owner_id !== req.user.id) return send(res, 403, { error: 'Not your routine' });
+  const info = store.createRoutine(req.user.id, routine.title + ' copy', routine.notes);
+  store.routineExercises(routine.id).forEach((e, i) => store.addRoutineExercise(info.lastInsertRowid, e.exercise_id, i, e.sets, e.reps, e.weight, e.rest_seconds));
+  return send(res, 201, { id: info.lastInsertRowid });
+});
+
 app.post('/api/link', auth, requireRole('client'), (req, res) => {
   const code = String((req.body || {}).code || '').trim().toUpperCase();
   const trainer = store.getUserByInvite(code);
@@ -142,7 +152,8 @@ app.post('/api/workouts', auth, (req, res) => {
   const { routine_id, title } = req.body || {};
   const routine = routine_id ? store.getRoutine(Number(routine_id)) : null;
   if (routine_id && !routine) return send(res, 404, { error: 'Routine not found' });
-  // Clients may start their own or assigned routines; trainers may start their own.
+  // Only the owner or an assigned client may start a routine. Guessing an id is not access.
+  if (routine && routine.owner_id !== req.user.id && !store.isAssigned(routine.id, req.user.id)) return send(res, 403, { error: 'Routine not available to you' });
   const info = store.createWorkout(req.user.id, routine_id ? Number(routine_id) : null, (title || (routine ? routine.title : 'Quick workout')).trim());
   if (routine) {
     store.routineExercises(routine.id).forEach((e) => {
