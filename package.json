@@ -1,0 +1,1 @@
+{"dependencies":{"better-sqlite3":"^12.0.0","express":"^5.1.0"},"description":"Trainer and client workout tracking: routines, fast set logging, progress and coaching in one place.","engines":{"node":">=22"},"license":"MIT","main":"server.js","name":"workout-tracker","scripts":{"start":"node server.js","test":"node test/smoke.js"},"version":"0.1.0"}

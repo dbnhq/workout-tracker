@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Workout Tracker</title><link rel="stylesheet" href="style.css"><link rel="manifest" href="manifest.json"></head>
+<body><header><h1>Workout Tracker</h1><div id="who"></div><button id="logoutBtn" hidden>Log out</button></header>
+<main>
+<section id="authView" class="card">
+<h2>Train smarter, together</h2>
+<p>Log workouts in seconds, follow a trainer's plan, and watch progress add up. Trainers coach clients from one dashboard.</p>
+<div class="row"><input id="name" placeholder="Full name"><input id="email" placeholder="Email" type="email"><input id="password" placeholder="Password (8+ chars)" type="password">
+<select id="role"><option value="client">I am a client</option><option value="trainer">I am a trainer</option></select></div>
+<div class="row"><button id="registerBtn">Create account</button><button id="loginBtn" class="secondary">Log in</button></div>
+<p id="authMsg" class="msg"></p>
+</section>
+
+<section id="appView" hidden>
+<nav class="tabs">
+<button data-tab="today" class="active">Today</button><button data-tab="routines">Routines</button><button data-tab="history">History</button><button data-tab="coach">Coach</button><button data-tab="progress">Progress</button>
+</nav>
+
+<div id="tab-today" class="tab">
+<div class="card"><h2 id="greet">Today</h2><p id="stats"></p>
+<div id="trainerBox"></div>
+<div class="row"><input id="quickTitle" placeholder="Workout title (optional)"><button id="quickBtn">Start quick workout</button></div>
+<div id="activeWorkout"></div></div>
+<div class="card"><h3>Assigned routines</h3><div id="assignedList"></div></div>
+<div class="card"><h3>Log body weight</h3><div class="row"><input id="bwDate" type="date"><input id="bwVal" type="number" step="0.1" placeholder="Weight"><button id="bwBtn">Save</button></div><div id="bwList"></div></div>
+</div>
+
+<div id="tab-routines" class="tab" hidden>
+<div class="card"><h2>New routine</h2><input id="rTitle" placeholder="Routine name, e.g. Upper A"><input id="rNotes" placeholder="Notes (optional)"><div id="rExercises"></div>
+<button id="addExBtn" class="secondary">Add exercise</button><button id="saveRoutineBtn">Save routine</button><p id="rMsg" class="msg"></p></div>
+<div class="card"><h3>My routines</h3><div id="myRoutines"></div></div>
+</div>
+
+<div id="tab-history" class="tab" hidden><div class="card"><h2>History</h2><div id="historyList"></div></div></div>
+
+<div id="tab-coach" class="tab" hidden>
+<div class="card" id="trainerCard"><h2>Trainer dashboard</h2><p>Share your invite code with clients. They enter it on their Today tab.</p><p>Your invite code: <strong id="inviteCode"></strong></p><div id="clientList"></div><div id="clientDetail"></div></div>
+<div class="card" id="clientCoachCard"><h2>Coach</h2><div class="row"><input id="linkCode" placeholder="Trainer invite code"><button id="linkBtn">Link trainer</button></div><div id="trainerList"></div><div id="feedbackList"></div></div>
+</div>
+
+<div id="tab-progress" class="tab" hidden><div class="card"><h2>Progress</h2><label>Exercise <select id="progEx"></select></label><div id="progOut"></div>
+<p>Plate calculator: bar + plates for a target weight.</p><div class="row"><input id="plateTarget" type="number" placeholder="Target weight"><button id="plateBtn">Calculate</button></div><p id="plateOut"></p></div></div>
+</main>
+<script src="app.js"></script></body></html>
