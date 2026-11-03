@@ -42,6 +42,24 @@ async function main() {
     assert.equal(blockedStart.status, 403, JSON.stringify(blockedStart.body));
     const dup = await req(`/api/routines/${routine.body.id}/duplicate`, 'POST', {}, tCookie);
     assert.equal(dup.status, 201, JSON.stringify(dup.body));
+    // Supersets: two exercises grouped, one single; grouping survives duplication and workout start
+    const ss = await req('/api/routines', 'POST', { title: 'Superset Test', exercises: [
+      { exercise_id: ex.body.exercises[0].id, sets: 3, reps: 10, superset_group: 1 },
+      { exercise_id: ex.body.exercises[1].id, sets: 3, reps: 10, superset_group: 1 },
+      { exercise_id: ex.body.exercises[2].id, sets: 3, reps: 10 },
+    ] }, tCookie);
+    assert.equal(ss.status, 201, JSON.stringify(ss.body));
+    const allRoutines = await req('/api/routines', 'GET', null, tCookie);
+    const ssFound = allRoutines.body.mine.find((r) => r.id === ss.body.id);
+    assert.deepEqual(ssFound.exercises.map((e) => e.superset_group), [1, 1, null]);
+    const ssDup = await req(`/api/routines/${ss.body.id}/duplicate`, 'POST', {}, tCookie);
+    assert.equal(ssDup.status, 201, JSON.stringify(ssDup.body));
+    const afterDup = await req('/api/routines', 'GET', null, tCookie);
+    const ssDupFound = afterDup.body.mine.find((r) => r.id === ssDup.body.id);
+    assert.deepEqual(ssDupFound.exercises.map((e) => e.superset_group), [1, 1, null]);
+    const ssWorkout = await req('/api/workouts', 'POST', { routine_id: ss.body.id }, tCookie);
+    assert.equal(ssWorkout.status, 201, JSON.stringify(ssWorkout.body));
+    assert.deepEqual(ssWorkout.body.routine_exercises.map((e) => e.superset_group), [1, 1, null]);
     const workout = await req('/api/workouts', 'POST', { routine_id: routine.body.id }, cCookie);
     assert.equal(workout.status, 201);
     assert.ok(workout.body.sets.length >= 2);

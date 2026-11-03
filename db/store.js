@@ -43,6 +43,9 @@ function openDb(dir) {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
+  // Migration for databases created before superset groups existed
+  const cols = db.prepare('PRAGMA table_info(routine_exercises)').all().map((c) => c.name);
+  if (!cols.includes('superset_group')) db.exec('ALTER TABLE routine_exercises ADD COLUMN superset_group INTEGER');
   const insert = db.prepare('INSERT OR IGNORE INTO exercises (name, muscle, equipment, instructions) VALUES (?,?,?,?)');
   for (const e of EXERCISES) insert.run(...e);
   return db;
@@ -65,8 +68,10 @@ function createStore(db) {
     myTrainers: (clientId) => db.prepare('SELECT u.id,u.name,u.email FROM trainer_clients tc JOIN users u ON u.id=tc.trainer_id WHERE tc.client_id=?').all(clientId),
     exercises: () => db.prepare('SELECT * FROM exercises ORDER BY muscle, name').all(),
     createRoutine: (ownerId, title, notes) => db.prepare('INSERT INTO routines (owner_id,title,notes) VALUES (?,?,?)').run(ownerId, title, notes || ''),
-    addRoutineExercise: (routineId, exerciseId, position, sets, reps, weight, rest) =>
-      db.prepare('INSERT INTO routine_exercises (routine_id,exercise_id,position,sets,reps,weight,rest_seconds) VALUES (?,?,?,?,?,?,?)').run(routineId, exerciseId, position, sets, reps, weight ?? null, rest ?? 90),
+    addRoutineExercise: (routineId, exerciseId, position, sets, reps, weight, rest, supersetGroup) => {
+      const g = Number.isInteger(supersetGroup) && supersetGroup >= 1 ? supersetGroup : null;
+      return db.prepare('INSERT INTO routine_exercises (routine_id,exercise_id,position,sets,reps,weight,rest_seconds,superset_group) VALUES (?,?,?,?,?,?,?,?)').run(routineId, exerciseId, position, sets, reps, weight ?? null, rest ?? 90, g);
+    },
     getRoutine: (id) => db.prepare('SELECT * FROM routines WHERE id=?').get(id),
     routineExercises: (id) => db.prepare('SELECT re.*, e.name, e.muscle, e.equipment FROM routine_exercises re JOIN exercises e ON e.id=re.exercise_id WHERE re.routine_id=? ORDER BY re.position').all(id),
     myRoutines: (userId) => db.prepare('SELECT * FROM routines WHERE owner_id=? ORDER BY created_at DESC').all(userId),

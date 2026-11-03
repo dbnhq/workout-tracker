@@ -100,7 +100,7 @@ app.post('/api/routines', auth, (req, res) => {
   if (!title || !Array.isArray(exercises) || exercises.length === 0) return send(res, 400, { error: 'Title and at least one exercise required' });
   const info = store.createRoutine(req.user.id, title.trim(), notes || '');
   exercises.forEach((e, i) => {
-    if (e.exercise_id) store.addRoutineExercise(info.lastInsertRowid, e.exercise_id, i, e.sets || 3, e.reps || 10, e.weight ?? null, e.rest_seconds ?? 90);
+    if (e.exercise_id) store.addRoutineExercise(info.lastInsertRowid, e.exercise_id, i, e.sets || 3, e.reps || 10, e.weight ?? null, e.rest_seconds ?? 90, e.superset_group ?? null);
   });
   return send(res, 201, { id: info.lastInsertRowid });
 });
@@ -118,7 +118,7 @@ app.post('/api/routines/:id/duplicate', auth, (req, res) => {
   const routine = store.getRoutine(Number(req.params.id));
   if (!routine || routine.owner_id !== req.user.id) return send(res, 403, { error: 'Not your routine' });
   const info = store.createRoutine(req.user.id, routine.title + ' copy', routine.notes);
-  store.routineExercises(routine.id).forEach((e, i) => store.addRoutineExercise(info.lastInsertRowid, e.exercise_id, i, e.sets, e.reps, e.weight, e.rest_seconds));
+  store.routineExercises(routine.id).forEach((e, i) => store.addRoutineExercise(info.lastInsertRowid, e.exercise_id, i, e.sets, e.reps, e.weight, e.rest_seconds, e.superset_group));
   return send(res, 201, { id: info.lastInsertRowid });
 });
 
@@ -167,7 +167,7 @@ app.post('/api/workouts', auth, (req, res) => {
       for (let i = 0; i < e.sets; i++) store.db.prepare('INSERT INTO workout_sets (workout_id,exercise_id,set_index,reps,weight,completed) VALUES (?,?,?,?,?,0)').run(info.lastInsertRowid, e.exercise_id, i + 1, e.reps, e.weight);
     });
   }
-  return send(res, 201, { id: info.lastInsertRowid, sets: store.workoutSets(info.lastInsertRowid) });
+  return send(res, 201, { id: info.lastInsertRowid, sets: store.workoutSets(info.lastInsertRowid), routine_exercises: routine ? store.routineExercises(routine.id) : [] });
 });
 
 app.get('/api/workouts', auth, (req, res) => {
