@@ -2,9 +2,17 @@ const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 let me = null, exercises = [], routines = [], activeId = null, restTimer = null, lastRoutineExercises = [];
 
+function showAuthView() {
+  $('#authView').hidden = false; $('#appView').hidden = true; $('#logoutBtn').hidden = true;
+}
 async function api(path, method = 'GET', body) {
   const r = await fetch(path, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
   const j = await r.json().catch(() => ({}));
+  if (r.status === 401 && !path.startsWith('/api/auth/')) {
+    // Session expired mid-app: back to sign-in instead of a dead screen
+    showAuthView();
+    throw new Error('Session expired — please sign in again');
+  }
   if (!r.ok) throw new Error(j.error || 'Request failed');
   return j;
 }
@@ -37,7 +45,7 @@ async function boot() {
     $('#greet').textContent = `Today · ${me.name}`;
     exercises = (await api('/api/exercises')).exercises;
     await loadAll();
-  } catch { $('#authView').hidden = false; $('#appView').hidden = true; }
+  } catch { showAuthView(); }
 }
 async function loadAll() {
   routines = await api('/api/routines');
@@ -159,7 +167,7 @@ $('#quickBtn').onclick = () => startWorkout(null, $('#quickTitle').value || 'Qui
 $('#bwBtn').onclick = async () => { await api('/api/body-weight', 'POST', { date: $('#bwDate').value || new Date().toISOString().slice(0, 10), weight: Number($('#bwVal').value) }); loadAll(); };
 $('#registerBtn').onclick = async () => { try { await api('/api/auth/register', 'POST', { name: $('#name').value, email: $('#email').value, password: $('#password').value, role: $('#role').value }); boot(); } catch (e) { $('#authMsg').textContent = e.message; } };
 $('#loginBtn').onclick = async () => { try { await api('/api/auth/login', 'POST', { email: $('#email').value, password: $('#password').value }); boot(); } catch (e) { $('#authMsg').textContent = e.message; } };
-$('#logoutBtn').onclick = async () => { await api('/api/auth/logout', 'POST', {}); location.reload(); };
+$('#logoutBtn').onclick = async () => { try { await api('/api/auth/logout', 'POST', {}); } catch {} location.reload(); };
 $('#linkBtn').onclick = async () => { try { await api('/api/link', 'POST', { code: $('#linkCode').value }); loadAll(); } catch (e) { alert(e.message); } };
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 boot();

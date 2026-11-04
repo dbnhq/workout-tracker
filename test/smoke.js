@@ -78,6 +78,13 @@ async function main() {
     assert.ok(clientProg.body.routines.some((r) => r.id === routine.body.id && r.exercises.length >= 1));
     const progBlocked = await req(`/api/trainer/clients/${client.body.user.id}/routines`, 'GET', null, other.cookie.split(';')[0]);
     assert.equal(progBlocked.status, 403);
+    // Login rate limit: 20 failed attempts per 15 minutes, then 429
+    for (let i = 0; i < 20; i++) {
+      const bad = await req('/api/auth/login', 'POST', { email: 'nobody@example.com', password: 'wrongpassword' });
+      assert.equal(bad.status, 401, `attempt ${i + 1}: ${JSON.stringify(bad.body)}`);
+    }
+    const limited = await req('/api/auth/login', 'POST', { email: 'nobody@example.com', password: 'wrongpassword' });
+    assert.equal(limited.status, 429, JSON.stringify(limited.body));
     // PWA files are served
     const sw = await fetch(base + '/sw.js');
     assert.equal(sw.status, 200);

@@ -43,17 +43,20 @@ function validEmail(e) { return typeof e === 'string' && /^[^\s@]+@[^\s@]+\.[^\s
 // SQLite datetime format, so expiry compares correctly against datetime('now')
 function sqliteExpiry(days) { return new Date(Date.now() + days * 24 * 3600 * 1000).toISOString().replace('T', ' ').slice(0, 19); }
 
-// Login rate limit, per IP, in memory
-const attempts = new Map();
-function loginAllowed(ip) {
+// Auth rate limits, per IP, in memory: 20 attempts per 15 minutes per endpoint
+const attempts = { login: new Map(), register: new Map() };
+function authAllowed(kind, ip) {
   const now = Date.now();
-  const list = (attempts.get(ip) || []).filter((t) => now - t < 15 * 60 * 1000);
-  attempts.set(ip, list);
+  const list = (attempts[kind].get(ip) || []).filter((t) => now - t < 15 * 60 * 1000);
+  attempts[kind].set(ip, list);
   return list.length < 20;
 }
-function recordAttempt(ip) { attempts.set(ip, [...(attempts.get(ip) || []), Date.now()]); }
+function recordAttempt(kind, ip) { attempts[kind].set(ip, [...(attempts[kind].get(ip) || []), Date.now()]); }
 
 app.post('/api/auth/register', (req, res) => {
+  const ip = req.ip || 'unknown';
+  if (!authAllowed('register', ip)) return send(res, 429, { error: 'Too many attempts, try again later' });
+  recordAttempt('register', ip);
   const { name, email, password, role } = req.body || {};
   if (!name || !validEmail(email) || typeof password !== 'string' || password.length < 8 || !['trainer', 'client'].includes(role))
     return send(res, 400, { error: 'Name, valid email, 8+ character password, and trainer/client role required' });
@@ -69,10 +72,10 @@ app.post('/api/auth/register', (req, res) => {
 
 app.post('/api/auth/login', (req, res) => {
   const ip = req.ip || 'unknown';
-  if (!loginAllowed(ip)) return send(res, 429, { error: 'Too many attempts, try again later' });
+  if (!authAllowed('login', ip)) return send(res, 429, { error: 'Too many attempts, try again later' });
   const { email, password } = req.body || {};
   const row = email ? store.getUserByEmail(email) : null;
-  if (!row || !verifyPassword(password || '', row.password_hash)) { recordAttempt(ip); return send(res, 401, { error: 'Invalid email or password' }); }
+  if (!row || !verifyPassword(password || '', row.password_hash)) { recordAttempt('login', ip); return send(res, 401, { error: 'Invalid email or password' }); }
   const user = store.getUserById(row.id);
   const token = newToken();
   store.createSession(hashToken(token), user.id, sqliteExpiry(30));
