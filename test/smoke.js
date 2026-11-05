@@ -6,7 +6,8 @@ const path = require('path');
 
 async function main() {
   const port = 3456;
-  const proc = spawn('node', ['server.js'], { env: { ...process.env, PORT: String(port), WORKOUT_DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'wt-test-')) }, stdio: 'pipe' });
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wt-test-'));
+  const proc = spawn('node', ['server.js'], { env: { ...process.env, PORT: String(port), WORKOUT_DATA_DIR: dataDir }, stdio: 'pipe' });
   await new Promise((r) => setTimeout(r, 1200));
   const base = `http://localhost:${port}`;
   async function req(path, method, body, cookie) {
@@ -90,6 +91,17 @@ async function main() {
     assert.equal(sw.status, 200);
     const manifest = await (await fetch(base + '/manifest.json')).json();
     assert.ok(manifest.icons.some((i) => i.sizes === '512x512'));
+    // Backup: online backup against the live server DB, then verify it opens
+    const backupPath = path.join(dataDir, 'backup-check.db');
+    const { execFile } = require('child_process');
+    await new Promise((resolve, reject) => execFile('node', ['scripts/backup.js', backupPath], { env: { ...process.env, WORKOUT_DATA_DIR: dataDir } }, (err) => (err ? reject(err) : resolve())));
+    assert.ok(fs.existsSync(backupPath), 'backup file created');
+    const Database = require('better-sqlite3');
+    const copy = new Database(backupPath, { readonly: true });
+    assert.equal(copy.prepare('SELECT COUNT(*) c FROM users').get().c, 4);
+    assert.equal(copy.prepare('SELECT COUNT(*) c FROM exercises').get().c, 32);
+    assert.equal(copy.prepare('SELECT COUNT(*) c FROM workouts WHERE finished_at IS NOT NULL').get().c, 1);
+    copy.close();
     console.log('smoke: all checks passed');
   } finally { proc.kill(); }
 }
