@@ -70,7 +70,7 @@ function renderActive(sets, routineExercises = []) {
   sets.forEach((s) => (byEx[s.exercise_id] = byEx[s.exercise_id] || { name: s.name, rows: [] }).rows.push(s));
   const groupOf = {};
   routineExercises.forEach((e) => { groupOf[e.exercise_id] = e.superset_group || null; });
-  const blocks = Object.entries(byEx).map(([exId, g]) => ({ group: groupOf[exId] || null, html: `<h4>${esc(g.name)}</h4>` + g.rows.map((s) => `<div class="set ${s.completed ? 'done' : ''}"><span>Set ${s.set_index}</span><input data-s="${s.id}" data-f="reps" type="number" value="${s.reps ?? ''}" placeholder="Reps"><input data-s="${s.id}" data-f="weight" type="number" step="0.5" value="${s.weight ?? ''}" placeholder="Weight"><button data-done="${s.exercise_id}:${s.set_index}">✓ Done</button></div>`).join('') + `<button class="secondary" data-addset="${exId}" data-next="${Math.max(...g.rows.map((r) => r.set_index)) + 1}">+ Add set</button>` }));
+  const blocks = Object.entries(byEx).map(([exId, g]) => ({ group: groupOf[exId] || null, html: `<h4>${esc(g.name)}</h4>` + g.rows.map((s) => `<div class="set ${s.completed ? 'done' : ''}"><span>Set ${s.set_index}</span><input data-s="${s.id}" data-f="reps" type="number" inputmode="numeric" value="${s.reps ?? ''}" placeholder="Reps"><input data-s="${s.id}" data-f="weight" type="number" step="0.5" inputmode="decimal" value="${s.weight ?? ''}" placeholder="Weight"><button data-done="${s.exercise_id}:${s.set_index}">✓ Done</button></div>`).join('') + `<button class="secondary" data-addset="${exId}" data-next="${Math.max(...g.rows.map((r) => r.set_index)) + 1}">+ Add set</button>` }));
   // Consecutive blocks sharing a superset group render inside one grouped box: alternate these.
   const body = [];
   for (let i = 0; i < blocks.length; i++) {
@@ -108,7 +108,7 @@ function renderRoutines() {
 }
 function addExRow() {
   const div = document.createElement('div'); div.className = 'row';
-  div.innerHTML = `<select class="exSel">${exercises.map((e) => `<option value="${e.id}">${esc(e.name)} (${esc(e.muscle)})</option>`).join('')}</select><input class="exSets" type="number" value="3" placeholder="Sets"><input class="exReps" type="number" value="10" placeholder="Reps"><input class="exWeight" type="number" step="0.5" placeholder="Weight"><select class="exSuperset" title="Superset group"><option value="">No superset</option><option value="1">Superset A</option><option value="2">Superset B</option><option value="3">Superset C</option></select>`;
+  div.innerHTML = `<select class="exSel">${exercises.map((e) => `<option value="${e.id}">${esc(e.name)} (${esc(e.muscle)})</option>`).join('')}</select><input class="exSets" type="number" inputmode="numeric" value="3" placeholder="Sets"><input class="exReps" type="number" inputmode="numeric" value="10" placeholder="Reps"><input class="exWeight" type="number" step="0.5" inputmode="decimal" placeholder="Weight"><select class="exSuperset" title="Superset group"><option value="">No superset</option><option value="1">Superset A</option><option value="2">Superset B</option><option value="3">Superset C</option></select>`;
   $('#rExercises').appendChild(div);
 }
 $('#addExBtn').onclick = addExRow;
@@ -124,7 +124,8 @@ async function renderCoach() {
   if (me.role === 'trainer') {
     $('#clientCoachCard').hidden = true; $('#inviteCode').textContent = me.invite_code || '';
     const d = await api('/api/trainer/clients');
-    $('#clientList').innerHTML = d.clients.length ? d.clients.map((c) => `<div><button data-client="${c.id}">${esc(c.name)}</button> <span class="small">${esc(c.email)}</span> <button data-assign="${c.id}">Assign routine…</button></div>`).join('') : '<p class="small">No clients linked yet. Share your invite code.</p>';
+    const assignOpts = routines.mine.map((r) => `<option value="${r.id}">${esc(r.title)}</option>`).join('');
+    $('#clientList').innerHTML = d.clients.length ? d.clients.map((c) => `<div class="row"><button data-client="${c.id}">${esc(c.name)}</button> <span class="small">${esc(c.email)}</span><select data-assign-sel="${c.id}">${assignOpts}</select><button data-assign="${c.id}">Assign</button></div>`).join('') : '<p class="small">No clients linked yet. Share your invite code.</p>';
     document.querySelectorAll('[data-client]').forEach((b) => (b.onclick = async () => {
       const cd = await api(`/api/trainer/clients/${b.dataset.client}/workouts`);
       const pr = await api(`/api/trainer/clients/${b.dataset.client}/routines`);
@@ -133,8 +134,10 @@ async function renderCoach() {
       $('#fbBtn').onclick = async () => { await api('/api/feedback', 'POST', { client_id: Number(b.dataset.client), body: $('#fbBody').value }); alert('Feedback sent.'); };
     }));
     document.querySelectorAll('[data-assign]').forEach((b) => (b.onclick = async () => {
-      const rid = prompt('Routine ID to assign? Your routines:\n' + routines.mine.map((r) => `${r.id}: ${r.title}`).join('\n'));
-      if (rid) { await api(`/api/routines/${rid}/assign`, 'POST', { client_id: Number(b.dataset.assign) }); alert('Assigned.'); }
+      const sel = document.querySelector(`[data-assign-sel="${b.dataset.assign}"]`);
+      if (!sel || !sel.value) { alert('Create a routine first.'); return; }
+      await api(`/api/routines/${sel.value}/assign`, 'POST', { client_id: Number(b.dataset.assign) });
+      alert('Assigned.');
     }));
   } else {
     $('#trainerCard').hidden = true;

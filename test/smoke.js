@@ -91,6 +91,16 @@ async function main() {
     assert.equal(sw.status, 200);
     const manifest = await (await fetch(base + '/manifest.json')).json();
     assert.ok(manifest.icons.some((i) => i.sizes === '512x512'));
+    // Mobile UX: no prompt() dialogs, numeric keyboards, 44px tab targets
+    const appJs = await (await fetch(base + '/app.js')).text();
+    assert.ok(!appJs.includes('prompt('), 'no prompt() in app.js');
+    assert.ok(appJs.includes('inputmode="numeric"'), 'numeric inputmode present');
+    assert.ok(appJs.includes('inputmode="decimal"'), 'decimal inputmode present');
+    assert.ok(appJs.includes('data-assign-sel'), 'inline routine-assign select present');
+    const indexHtml = await (await fetch(base + '/index.html')).text();
+    assert.ok(indexHtml.includes('inputmode="decimal"'), 'inputmode on static numeric inputs');
+    const css = await (await fetch(base + '/style.css')).text();
+    assert.ok(css.includes('.tabs button{flex:0 0 auto;padding:12px 14px}'), 'mobile tab tap targets are 44px');
     // Backup: online backup against the live server DB, then verify it opens
     const backupPath = path.join(dataDir, 'backup-check.db');
     const { execFile } = require('child_process');

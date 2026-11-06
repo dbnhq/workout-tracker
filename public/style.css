@@ -2,4 +2,4 @@
 
 .bars{display:flex;gap:8px;align-items:flex-end;height:120px}.bar{flex:1;background:#22c55e;border-radius:6px 6px 0 0;min-height:4px}.barlabel{font-size:11px;color:#94a3b8;text-align:center}
 .superset{border:1px solid #22c55e;border-radius:12px;padding:4px 10px 10px;margin:10px 0}.superset-label{color:#22c55e;font-weight:700;font-size:14px;margin:8px 0 4px}
-@media (max-width:520px){main{padding:10px}header{padding:12px}.card{padding:12px}.tabs{flex-wrap:nowrap;overflow-x:auto}.tabs button{flex:0 0 auto;padding:10px 12px}input,select{min-width:0}.set{flex-wrap:wrap}.set input{max-width:none;flex:1 1 100px}.set button{flex:1 1 auto}}
+@media (max-width:520px){main{padding:10px}header{padding:12px;flex-wrap:wrap;gap:8px}h1{font-size:18px}.card{padding:12px}.tabs{flex-wrap:nowrap;overflow-x:auto}.tabs button{flex:0 0 auto;padding:12px 14px}input,select{min-width:0}.set{flex-wrap:wrap}.set input{max-width:none;flex:1 1 100px}.set button{flex:1 1 auto}}
