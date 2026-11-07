@@ -73,6 +73,21 @@ async function main() {
     assert.equal(prog.body.best.max_weight, 60);
     const fb = await req('/api/feedback', 'POST', { client_id: client.body.user.id, body: 'Great session' }, tCookie);
     assert.equal(fb.status, 201);
+    // Feedback pinned to another client's workout is rejected
+    const strangerWorkout = await req('/api/workouts', 'POST', {}, stranger.cookie.split(';')[0]);
+    assert.equal(strangerWorkout.status, 201, JSON.stringify(strangerWorkout.body));
+    const fbWrong = await req('/api/feedback', 'POST', { client_id: client.body.user.id, workout_id: strangerWorkout.body.id, body: 'Wrong client' }, tCookie);
+    assert.equal(fbWrong.status, 403, JSON.stringify(fbWrong.body));
+    // A routine with an unknown exercise is rejected and creates nothing
+    const beforeBad = (await req('/api/routines', 'GET', null, tCookie)).body.mine.length;
+    const badRoutine = await req('/api/routines', 'POST', { title: 'Bad', exercises: [{ exercise_id: 99999, sets: 3, reps: 10 }] }, tCookie);
+    assert.equal(badRoutine.status, 400, JSON.stringify(badRoutine.body));
+    const afterBad = (await req('/api/routines', 'GET', null, tCookie)).body.mine.length;
+    assert.equal(afterBad, beforeBad);
+    // Non-numeric set values are rejected (on an unfinished workout)
+    const ssFirst = ssWorkout.body.sets[0];
+    const badSet = await req(`/api/workouts/${ssWorkout.body.id}/sets`, 'POST', { exercise_id: ssFirst.exercise_id, set_index: ssFirst.set_index, reps: 'many', weight: 60 }, tCookie);
+    assert.equal(badSet.status, 400, JSON.stringify(badSet.body));
     // Trainer program view: linked trainer sees assigned routines, unlinked trainer is blocked
     const clientProg = await req(`/api/trainer/clients/${client.body.user.id}/routines`, 'GET', null, tCookie);
     assert.equal(clientProg.status, 200, JSON.stringify(clientProg.body));
@@ -89,6 +104,7 @@ async function main() {
     // PWA files are served
     const sw = await fetch(base + '/sw.js');
     assert.equal(sw.status, 200);
+    assert.equal(sw.headers.get('x-content-type-options'), 'nosniff', 'static files carry security headers');
     const manifest = await (await fetch(base + '/manifest.json')).json();
     assert.ok(manifest.icons.some((i) => i.sizes === '512x512'));
     // Mobile UX: no prompt() dialogs, numeric keyboards, 44px tab targets

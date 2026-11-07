@@ -67,6 +67,7 @@ function createStore(db) {
     trainerClients: (trainerId) => db.prepare('SELECT u.id,u.name,u.email FROM trainer_clients tc JOIN users u ON u.id=tc.client_id WHERE tc.trainer_id=? ORDER BY u.name').all(trainerId),
     myTrainers: (clientId) => db.prepare('SELECT u.id,u.name,u.email FROM trainer_clients tc JOIN users u ON u.id=tc.trainer_id WHERE tc.client_id=?').all(clientId),
     exercises: () => db.prepare('SELECT * FROM exercises ORDER BY muscle, name').all(),
+    getExercise: (id) => db.prepare('SELECT * FROM exercises WHERE id=?').get(id),
     createRoutine: (ownerId, title, notes) => db.prepare('INSERT INTO routines (owner_id,title,notes) VALUES (?,?,?)').run(ownerId, title, notes || ''),
     addRoutineExercise: (routineId, exerciseId, position, sets, reps, weight, rest, supersetGroup) => {
       const g = Number.isInteger(supersetGroup) && supersetGroup >= 1 ? supersetGroup : null;

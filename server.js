@@ -10,20 +10,23 @@ const store = createStore(db);
 
 const app = express();
 app.use(express.json({ limit: '100kb' }));
-app.use(express.static(path.join(__dirname, 'public')));
-// Basic security headers, no extra deps
+// Security headers first, so static files get them too
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'no-referrer');
   next();
 });
+app.use(express.static(path.join(__dirname, 'public')));
 
 function parseCookie(req) {
   const out = {};
   (req.headers.cookie || '').split(';').forEach((p) => {
     const i = p.indexOf('=');
-    if (i > 0) out[p.slice(0, i).trim()] = decodeURIComponent(p.slice(i + 1).trim());
+    if (i > 0) {
+      try { out[p.slice(0, i).trim()] = decodeURIComponent(p.slice(i + 1).trim()); }
+      catch { out[p.slice(0, i).trim()] = p.slice(i + 1).trim(); }
+    }
   });
   return out;
 }
@@ -98,9 +101,21 @@ app.get('/api/routines', auth, (req, res) => {
   return send(res, 200, { mine, assigned });
 });
 
+function validRoutineExercises(exercises) {
+  if (!Array.isArray(exercises) || exercises.length === 0) return false;
+  return exercises.every((e) => e && Number.isInteger(e.exercise_id) && e.exercise_id > 0 &&
+    (e.sets === undefined || (Number.isInteger(e.sets) && e.sets > 0 && e.sets <= 20)) &&
+    (e.reps === undefined || (Number.isInteger(e.reps) && e.reps > 0 && e.reps <= 200)) &&
+    (e.weight === undefined || e.weight === null || (typeof e.weight === 'number' && Number.isFinite(e.weight) && e.weight >= 0)) &&
+    (e.rest_seconds === undefined || e.rest_seconds === null || (Number.isInteger(e.rest_seconds) && e.rest_seconds >= 0 && e.rest_seconds <= 3600)) &&
+    (e.superset_group === undefined || e.superset_group === null || (Number.isInteger(e.superset_group) && e.superset_group >= 1)));
+}
+
 app.post('/api/routines', auth, (req, res) => {
   const { title, notes, exercises } = req.body || {};
-  if (!title || !Array.isArray(exercises) || exercises.length === 0) return send(res, 400, { error: 'Title and at least one exercise required' });
+  if (!title || !validRoutineExercises(exercises)) return send(res, 400, { error: 'Title and at least one valid exercise required' });
+  // Validate exercise ids exist before creating anything, so a bad id can't leave a half-built routine
+  if (exercises.some((e) => !store.getExercise(e.exercise_id))) return send(res, 400, { error: 'Unknown exercise' });
   const info = store.createRoutine(req.user.id, title.trim(), notes || '');
   exercises.forEach((e, i) => {
     if (e.exercise_id) store.addRoutineExercise(info.lastInsertRowid, e.exercise_id, i, e.sets || 3, e.reps || 10, e.weight ?? null, e.rest_seconds ?? 90, e.superset_group ?? null);
@@ -153,6 +168,11 @@ app.get('/api/trainer/clients/:id/routines', auth, requireRole('trainer'), (req,
 app.post('/api/feedback', auth, requireRole('trainer'), (req, res) => {
   const { client_id, workout_id, body } = req.body || {};
   if (!body || !store.isLinked(req.user.id, Number(client_id))) return send(res, 403, { error: 'Client is not linked to you or feedback is empty' });
+  // A workout reference must belong to the same client, so feedback can't be pinned to someone else's session
+  if (workout_id) {
+    const w = store.getWorkout(Number(workout_id));
+    if (!w || w.user_id !== Number(client_id)) return send(res, 403, { error: 'Workout does not belong to this client' });
+  }
   store.addFeedback(req.user.id, Number(client_id), workout_id ? Number(workout_id) : null, body.trim());
   return send(res, 201, { ok: true });
 });
@@ -183,6 +203,10 @@ app.post('/api/workouts/:id/sets', auth, (req, res) => {
   if (!workout || workout.user_id !== req.user.id || workout.finished_at) return send(res, 403, { error: 'Workout not available' });
   const { exercise_id, set_index, reps, weight, rpe } = req.body || {};
   if (!exercise_id || !set_index) return send(res, 400, { error: 'Exercise and set required' });
+  if (!Number.isInteger(Number(set_index)) || Number(set_index) < 1) return send(res, 400, { error: 'Set must be a positive number' });
+  for (const [key, v] of [['reps', reps], ['weight', weight], ['rpe', rpe]]) {
+    if (v !== undefined && v !== null && (typeof v !== 'number' || !Number.isFinite(v) || v < 0)) return send(res, 400, { error: `${key} must be a number` });
+  }
   // Mark a planned set complete, or add an extra set
   const existing = store.db.prepare('SELECT * FROM workout_sets WHERE workout_id=? AND exercise_id=? AND set_index=?').get(workout.id, exercise_id, set_index);
   if (existing) {
@@ -207,7 +231,7 @@ app.get('/api/progress/:exerciseId', auth, (req, res) => {
 
 app.post('/api/body-weight', auth, (req, res) => {
   const { date, weight } = req.body || {};
-  if (!date || !Number.isFinite(Number(weight))) return send(res, 400, { error: 'Date and weight required' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || !Number.isFinite(Number(weight)) || Number(weight) <= 0) return send(res, 400, { error: 'Date (YYYY-MM-DD) and a positive weight required' });
   store.addBodyWeight(req.user.id, date, Number(weight));
   return send(res, 201, { ok: true });
 });
