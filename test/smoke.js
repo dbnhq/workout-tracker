@@ -88,6 +88,18 @@ async function main() {
     const ssFirst = ssWorkout.body.sets[0];
     const badSet = await req(`/api/workouts/${ssWorkout.body.id}/sets`, 'POST', { exercise_id: ssFirst.exercise_id, set_index: ssFirst.set_index, reps: 'many', weight: 60 }, tCookie);
     assert.equal(badSet.status, 400, JSON.stringify(badSet.body));
+    // A set for an unknown exercise is rejected, not a 500 from the foreign key
+    const unknownSet = await req(`/api/workouts/${ssWorkout.body.id}/sets`, 'POST', { exercise_id: 99999, set_index: 1, reps: 8 }, tCookie);
+    assert.equal(unknownSet.status, 400, JSON.stringify(unknownSet.body));
+    // Blank or non-string text fields are rejected or defaulted, never a 500
+    const blankName = await req('/api/auth/register', 'POST', { name: '   ', email: 'blank@example.com', password: 'password123', role: 'client' });
+    assert.equal(blankName.status, 400, JSON.stringify(blankName.body));
+    const blankTitle = await req('/api/routines', 'POST', { title: '   ', exercises: [{ exercise_id: ex.body.exercises[0].id, sets: 2, reps: 8 }] }, tCookie);
+    assert.equal(blankTitle.status, 400, JSON.stringify(blankTitle.body));
+    const numFeedback = await req('/api/feedback', 'POST', { client_id: client.body.user.id, body: 42 }, tCookie);
+    assert.equal(numFeedback.status, 400, JSON.stringify(numFeedback.body));
+    const numTitle = await req('/api/workouts', 'POST', { title: 42 }, cCookie);
+    assert.equal(numTitle.status, 201, JSON.stringify(numTitle.body));
     // Trainer program view: linked trainer sees assigned routines, unlinked trainer is blocked
     const clientProg = await req(`/api/trainer/clients/${client.body.user.id}/routines`, 'GET', null, tCookie);
     assert.equal(clientProg.status, 200, JSON.stringify(clientProg.body));

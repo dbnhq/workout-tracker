@@ -61,7 +61,7 @@ app.post('/api/auth/register', (req, res) => {
   if (!authAllowed('register', ip)) return send(res, 429, { error: 'Too many attempts, try again later' });
   recordAttempt('register', ip);
   const { name, email, password, role } = req.body || {};
-  if (!name || !validEmail(email) || typeof password !== 'string' || password.length < 8 || !['trainer', 'client'].includes(role))
+  if (typeof name !== 'string' || !name.trim() || !validEmail(email) || typeof password !== 'string' || password.length < 8 || !['trainer', 'client'].includes(role))
     return send(res, 400, { error: 'Name, valid email, 8+ character password, and trainer/client role required' });
   if (store.getUserByEmail(email)) return send(res, 409, { error: 'Email already registered' });
   const invite = role === 'trainer' ? newInviteCode() : null;
@@ -113,10 +113,10 @@ function validRoutineExercises(exercises) {
 
 app.post('/api/routines', auth, (req, res) => {
   const { title, notes, exercises } = req.body || {};
-  if (!title || !validRoutineExercises(exercises)) return send(res, 400, { error: 'Title and at least one valid exercise required' });
+  if (typeof title !== 'string' || !title.trim() || !validRoutineExercises(exercises)) return send(res, 400, { error: 'Title and at least one valid exercise required' });
   // Validate exercise ids exist before creating anything, so a bad id can't leave a half-built routine
   if (exercises.some((e) => !store.getExercise(e.exercise_id))) return send(res, 400, { error: 'Unknown exercise' });
-  const info = store.createRoutine(req.user.id, title.trim(), notes || '');
+  const info = store.createRoutine(req.user.id, title.trim(), typeof notes === 'string' ? notes : '');
   exercises.forEach((e, i) => {
     if (e.exercise_id) store.addRoutineExercise(info.lastInsertRowid, e.exercise_id, i, e.sets || 3, e.reps || 10, e.weight ?? null, e.rest_seconds ?? 90, e.superset_group ?? null);
   });
@@ -167,7 +167,8 @@ app.get('/api/trainer/clients/:id/routines', auth, requireRole('trainer'), (req,
 
 app.post('/api/feedback', auth, requireRole('trainer'), (req, res) => {
   const { client_id, workout_id, body } = req.body || {};
-  if (!body || !store.isLinked(req.user.id, Number(client_id))) return send(res, 403, { error: 'Client is not linked to you or feedback is empty' });
+  if (!store.isLinked(req.user.id, Number(client_id))) return send(res, 403, { error: 'Client is not linked to you' });
+  if (typeof body !== 'string' || !body.trim()) return send(res, 400, { error: 'Feedback text required' });
   // A workout reference must belong to the same client, so feedback can't be pinned to someone else's session
   if (workout_id) {
     const w = store.getWorkout(Number(workout_id));
@@ -184,7 +185,9 @@ app.post('/api/workouts', auth, (req, res) => {
   if (routine_id && !routine) return send(res, 404, { error: 'Routine not found' });
   // Only the owner or an assigned client may start a routine. Guessing an id is not access.
   if (routine && routine.owner_id !== req.user.id && !store.isAssigned(routine.id, req.user.id)) return send(res, 403, { error: 'Routine not available to you' });
-  const info = store.createWorkout(req.user.id, routine_id ? Number(routine_id) : null, (title || (routine ? routine.title : 'Quick workout')).trim());
+  // A non-string title falls back to the routine title or the default, never a 500
+  const wTitle = typeof title === 'string' && title.trim() ? title.trim() : (routine ? routine.title : 'Quick workout');
+  const info = store.createWorkout(req.user.id, routine_id ? Number(routine_id) : null, wTitle);
   if (routine) {
     store.routineExercises(routine.id).forEach((e) => {
       for (let i = 0; i < e.sets; i++) store.db.prepare('INSERT INTO workout_sets (workout_id,exercise_id,set_index,reps,weight,completed) VALUES (?,?,?,?,?,0)').run(info.lastInsertRowid, e.exercise_id, i + 1, e.reps, e.weight);
@@ -202,17 +205,20 @@ app.post('/api/workouts/:id/sets', auth, (req, res) => {
   const workout = store.getWorkout(Number(req.params.id));
   if (!workout || workout.user_id !== req.user.id || workout.finished_at) return send(res, 403, { error: 'Workout not available' });
   const { exercise_id, set_index, reps, weight, rpe } = req.body || {};
-  if (!exercise_id || !set_index) return send(res, 400, { error: 'Exercise and set required' });
+  // Unknown exercise ids used to hit the foreign key and 500; reject them up front
+  const exId = Number(exercise_id);
+  if (!Number.isInteger(exId) || exId < 1 || !store.getExercise(exId)) return send(res, 400, { error: 'Unknown exercise' });
+  if (!set_index) return send(res, 400, { error: 'Exercise and set required' });
   if (!Number.isInteger(Number(set_index)) || Number(set_index) < 1) return send(res, 400, { error: 'Set must be a positive number' });
   for (const [key, v] of [['reps', reps], ['weight', weight], ['rpe', rpe]]) {
     if (v !== undefined && v !== null && (typeof v !== 'number' || !Number.isFinite(v) || v < 0)) return send(res, 400, { error: `${key} must be a number` });
   }
   // Mark a planned set complete, or add an extra set
-  const existing = store.db.prepare('SELECT * FROM workout_sets WHERE workout_id=? AND exercise_id=? AND set_index=?').get(workout.id, exercise_id, set_index);
+  const existing = store.db.prepare('SELECT * FROM workout_sets WHERE workout_id=? AND exercise_id=? AND set_index=?').get(workout.id, exId, set_index);
   if (existing) {
     store.db.prepare('UPDATE workout_sets SET reps=?, weight=?, rpe=?, completed=1 WHERE id=?').run(reps ?? existing.reps, weight ?? existing.weight, rpe ?? null, existing.id);
   } else {
-    store.addSet(workout.id, exercise_id, set_index, reps, weight, rpe);
+    store.addSet(workout.id, exId, set_index, reps, weight, rpe);
   }
   return send(res, 200, { sets: store.workoutSets(workout.id) });
 });
@@ -220,7 +226,8 @@ app.post('/api/workouts/:id/sets', auth, (req, res) => {
 app.post('/api/workouts/:id/finish', auth, (req, res) => {
   const workout = store.getWorkout(Number(req.params.id));
   if (!workout || workout.user_id !== req.user.id) return send(res, 403, { error: 'Not your workout' });
-  store.finishWorkout(workout.id, (req.body || {}).notes || '');
+  const notes = (req.body || {}).notes;
+  store.finishWorkout(workout.id, typeof notes === 'string' ? notes : '');
   return send(res, 200, { ok: true });
 });
 
