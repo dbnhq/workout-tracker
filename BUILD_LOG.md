@@ -10,4 +10,5 @@
 - Nov 2, 2026 — Audit pass 1: fixed routine-start authorization (guessing a routine id no longer starts it; owner or assigned client only), fixed session expiry to SQLite datetime format, added per-exercise Add set, routine duplication, and a recent-volume chart on Progress. Smoke tests extended for the blocked start and duplication, all green.
 # Build log
 
+- Nov 11, 2026 — Post-v1 audit: v1.0.0 tag verified on origin (f682ccf, main in sync, working tree clean), smoke suite green, live boot on the real DB (api/health 200, app 200, unauthenticated API 401), no new features — audit-only per the schedule. Still open post-v1: real-phone mobile check, live demo deploy.
 - Nov 2, 2026 — Initial v1 scaffold: trainer/client auth with invite-code linking, 32-exercise library, routines and trainer assignment, fast set logging with rest timer, history, per-exercise bests and estimated 1RM, plate calculator, body-weight log, trainer feedback, smoke tests covering the full loop and role gating.
